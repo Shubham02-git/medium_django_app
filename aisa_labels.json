@@ -1,0 +1,67 @@
+{
+  "dataset_name": "aisa_medium_django_training_v1",
+  "description": "Partially vulnerable Django repo. 2 HIGH + 1 MEDIUM vuln. Used for boundary/calibration training.",
+  "expected_risk_score": 50,
+  "expected_severity": "High",
+  "vulnerabilities": [
+    {
+      "id": "vuln_001",
+      "weakness_label": "missing_object_level_auth",
+      "display_name": "Soft IDOR — Auth present, ownership check absent",
+      "file": "api/vulnerability_cases/soft_idor_case.py",
+      "class": "OrderDetailView",
+      "vulnerable_line": "order = get_object_or_404(Order, id=id)",
+      "endpoint": "GET /api/orders/<id>/",
+      "cwe": "CWE-639",
+      "severity": "HIGH",
+      "confidence_hint": 0.72,
+      "key_difference": "Unlike vuln repo (no auth at all), this has IsAuthenticated but missing user ownership filter",
+      "detection_pattern": "get_object_or_404(Model, id=id) without user= filter, despite IsAuthenticated being present",
+      "fix_hint": "get_object_or_404(Order, id=id, user=request.user)"
+    },
+    {
+      "id": "vuln_002",
+      "weakness_label": "missing_rate_limiting",
+      "display_name": "No Brute-Force Protection on Login",
+      "file": "api/vulnerability_cases/rate_limit_missing_case.py",
+      "class": "LoginView",
+      "vulnerable_line": "no throttle_classes defined",
+      "endpoint": "POST /api/auth/login/",
+      "cwe": "CWE-307",
+      "severity": "HIGH",
+      "confidence_hint": 0.68,
+      "key_difference": "Auth logic itself is correct; vulnerability is the absence of throttling",
+      "detection_pattern": "Login endpoint with no throttle_classes and no account lockout",
+      "fix_hint": "Add throttle_classes = [AnonRateThrottle] + account lockout after 5 failures"
+    },
+    {
+      "id": "vuln_003",
+      "weakness_label": "verbose_error_disclosure",
+      "display_name": "Raw Exception Messages Leaked to Client",
+      "file": "api/vulnerability_cases/verbose_error_case.py",
+      "class": "OrderSearchView",
+      "vulnerable_line": "return Response({\"error\": str(e)})",
+      "endpoint": "GET /api/orders/search/",
+      "cwe": "CWE-209",
+      "severity": "MEDIUM",
+      "confidence_hint": 0.65,
+      "key_difference": "Not a direct data leak — leaks internal structure (table names, field names) via error messages",
+      "detection_pattern": "except Exception as e: return Response({'error': str(e)})",
+      "fix_hint": "Return generic error; log details with logger.exception() server-side only"
+    }
+  ],
+  "clean_views": [
+    "ProductListView — intentionally public, product catalog",
+    "OrderCreateView — proper auth + user scoping",
+    "AdminUserListView — IsAdminUser guard present"
+  ],
+  "attack_chains": [
+    {
+      "chain_id": "chain_001",
+      "name": "Brute Force to IDOR",
+      "steps": ["LoginView (no rate limit) → brute force credentials", "OrderDetailView (soft IDOR) → access any order"],
+      "severity": "HIGH"
+    }
+  ],
+  "ml_training_note": "Boundary calibration dataset. Score should land between clean repo (~5) and vuln repo (100). Expected: 45-55, severity High."
+}
